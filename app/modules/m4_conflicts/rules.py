@@ -7,5 +7,6 @@ def evaluate(rows,context):
     out=[]
     for row in rows:
         decision=decide(row.get("candidates",[]),row["partition"])
-        out.append({**row,**decision,"rule_evidence":" / ".join(decision["matched_rules"]) or "NO_GRANT"})
-    return {"rows":out,"quarantine":[],"metrics":{"conflicts":sum(r["conflict"] for r in out),"explicit_denies":sum(bool(r["deny_rules"]) for r in out),"default_denies":sum(not r["matched_rules"] for r in out)}}
+        lock=row.get("tenant_lock") or {}
+        out.append({**row,**decision,"tenant":lock.get("tenant"),"tenant_status":lock.get("status"),"rule_evidence":" / ".join(decision["matched_rules"]) or "NO_GRANT"})
+    return {"rows":out,"quarantine":[],"metrics":{"conflicts":sum(r["conflict"] for r in out),"explicit_denies":sum(bool(r["deny_rules"]) for r in out),"default_denies":sum(not r["matched_rules"] for r in out),"tenants":len(set(r["tenant"] for r in out if r.get("tenant")))}}

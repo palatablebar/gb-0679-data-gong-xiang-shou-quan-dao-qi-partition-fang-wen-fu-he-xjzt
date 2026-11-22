@@ -1,0 +1,9 @@
+event_id,principal,resource,partition,access_time,observed,reported,note,tenant,tenant_credential
+T001,analyst,orders,2026-10,2026-11-16T00:00:00Z,allowed,1,租户A授权已失效,A,cred-a-001
+T002,analyst,orders,2026-10,2026-11-16T00:00:00Z,allowed,1,租户B授权仍有效,B,cred-b-001
+T003,analyst,orders,2026-10,2026-11-16T00:00:00Z,allowed,1,同步声明两份,B,cred-b-002
+T004,analyst,orders,2026-10,2026-11-16T00:00:00Z,allowed,1,无凭据不得据声明放行,A,
+T005,analyst,orders,2026-10,2026-11-16T00:00:00Z,allowed,1,无任何声明,,cred-x-001
+T006,analyst,orders,2026-10,2026-11-16T00:00:00Z,allowed,1,档案与声明一致,A,cred-a-002
+T007,analyst,orders,2026-10,2026-11-16T00:00:00Z,allowed,1,档案未同步,B,cred-b-003
+T008,analyst,orders,2026-10,2026-11-16T00:00:00Z,allowed,1,档案记A声明B,B,cred-b-004

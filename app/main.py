@@ -25,7 +25,9 @@ def create_app():
         if not isinstance(params,dict): raise DomainError("BAD_PARAMETERS","参数需要对象")
         raw=payload.get("csv")
         if raw is not None and not isinstance(raw,str): raise DomainError("BAD_CSV","CSV需要文本")
-        return pipeline.execute(raw.encode() if raw is not None else pipeline.load_sample(payload.get("sample","dirty.csv")),params)
+        sample=payload.get("sample","dirty.csv")
+        if raw is None: params=pipeline.sample_parameters(sample,params)
+        return pipeline.execute(raw.encode() if raw is not None else pipeline.load_sample(sample),params)
     @application.post("/api/upload")
     def upload():
         file=request.files.get("file")
@@ -48,6 +50,8 @@ def create_app():
     for index,(slug,title) in enumerate(MODULES,1):
         module=importlib.import_module(f"app.modules.m{index}_{slug}.handler")
         application.register_blueprint(module.bp)
+    from app.modules.tenant_locks.handler import bp as tenant_bp
+    application.register_blueprint(tenant_bp)
     register_pages(application)
     return application
 app=create_app()

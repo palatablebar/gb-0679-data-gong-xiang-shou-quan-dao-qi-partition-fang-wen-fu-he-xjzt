@@ -1,6 +1,7 @@
 from app.values import instant,number
 from app.reasons import reject
 from app.errors import DomainError
+from app import tenants
 GRANTS=[{"id":"G-01","principal":"analyst","resource":"orders","start":"2026-11-01T00:00:00Z","end":"2026-12-01T00:00:00Z","from_partition":"2026-01","to_partition":"2026-12","effect":"allow"},{"id":"G-02","principal":"analyst","resource":"orders","start":"2026-11-10T00:00:00Z","end":"2026-11-20T00:00:00Z","from_partition":"2026-10","to_partition":"2026-11","effect":"deny"},{"id":"G-03","principal":"auditor","resource":"customers","start":"2026-11-01T00:00:00Z","end":"2026-12-01T00:00:00Z","from_partition":"2026-01","to_partition":"2026-12","effect":"allow"}]
 def validate_grants(grants):
     ids=set()
@@ -9,12 +10,16 @@ def validate_grants(grants):
         ids.add(g["id"])
     return grants
 def evaluate(rows,context):
-    grants=validate_grants(context.get("parameters",{}).get("grants",GRANTS));good=[];bad=[]
+    grants=validate_grants(context.get("parameters",{}).get("grants",GRANTS));good=[];bad=[];pending=0
     for row in rows:
+        lock=row.get("tenant_lock") or tenants.legacy_lock(row)
+        # 凭据缺失/声明冲突的访问先待核，不得进入授权复核，也不得借用任何租户的授权。
+        if tenants.pending(lock):bad.append(tenants.reject_pending(row));pending+=1;continue
         try:
             at=instant(row["access_time"]);reported=number(row["reported"])
             if reported not in {0,1}:raise DomainError("BAD_OBSERVED","报送判定必须为0或1")
-            active=[g for g in grants if g["principal"]==row["principal"] and g["resource"]==row["resource"] and instant(g["start"])<=at<instant(g["end"])]
-            good.append({**row,"at":at.isoformat(),"candidates":active,"candidate_count":len(active),"reported":str(reported)})
+            # 只认锁：同名资源/分区不再能借到另一租户的授权。
+            active=[g for g in grants if tenants.grant_applies(lock,g) and g["principal"]==row["principal"] and g["resource"]==row["resource"] and instant(g["start"])<=at<instant(g["end"])]
+            good.append({**row,"tenant_lock":lock,"tenant":lock["tenant"],"tenant_status":lock["status"],"at":at.isoformat(),"candidates":active,"candidate_count":len(active),"reported":str(reported)})
         except (DomainError,KeyError) as e:bad.append(reject(row,getattr(e,"code","MISSING_FIELD"),str(e)))
-    return {"rows":good,"quarantine":bad,"metrics":{"active_hits":sum(r["candidate_count"] for r in good),"grant_versions":len(grants)}}
+    return {"rows":good,"quarantine":bad,"metrics":{"active_hits":sum(r["candidate_count"] for r in good),"grant_versions":len(grants),"tenant_pending":pending}}

@@ -1,5 +1,5 @@
 import csv,io
-from app.config import COLUMNS
+from app.config import COLUMNS,OPTIONAL_COLUMNS
 from app.errors import DomainError
 from app.reasons import reject
 def decode(raw):
@@ -7,12 +7,17 @@ def decode(raw):
         try: return raw.decode(encoding),encoding
         except UnicodeDecodeError: continue
     raise DomainError("ENCODING","无法识别文件编码")
+def _header_ok(header):
+    if header[:len(COLUMNS)]!=COLUMNS: return False
+    extra=header[len(COLUMNS):]
+    if len(extra)>len(OPTIONAL_COLUMNS): return False
+    return all(name==OPTIONAL_COLUMNS[index] for index,name in enumerate(extra))
 def evaluate(raw,context=None):
     text,encoding=decode(raw)
     if not text: raise DomainError("EMPTY_FILE","文件为空")
     if not text.strip(): raise DomainError("BLANK_ONLY","全部为空行")
     stream=csv.reader(io.StringIO(text,newline=""));header=next(stream,None)
-    if header!=COLUMNS: raise DomainError("BAD_HEADER","表头不匹配")
+    if not _header_ok(header): raise DomainError("BAD_HEADER","表头不匹配")
     rows=[];bad=[];seen={};duplicate=blank=repeated=count=0
     try:
         for cells in stream:
@@ -23,7 +28,8 @@ def evaluate(raw,context=None):
             if len(cells)!=len(header): bad.append(reject(row,"BAD_COLUMNS","列数不匹配"));continue
             row.update(dict(zip(header,[x.strip() for x in cells])))
             if not row[header[0]]: bad.append(reject(row,"EMPTY_VALUE","业务键为空"));continue
-            key=row[header[0]]
+            # 多租户共用同名资源：业务键是事件号+租户，同名不同租户是各自独立的访问。
+            key=(row[header[0]],row.get("tenant",""))
             if key in seen:
                 previous=seen[key]
                 if cells==previous["_raw"]: duplicate+=1
